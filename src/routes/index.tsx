@@ -139,12 +139,15 @@ interface OpenMeteoResponse {
 }
 
 function MeteoVerona() {
-  const [selectedDay, setSelectedDay] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(() => new Date().getDay());
+  const [loading, setLoading] = useState(true);
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
 
-  async function showWeather() {
+  async function showWeather(day: number) {
+    const id = ++requestId.current;
+    setSelectedDay(day);
     setLoading(true);
     setForecast(null);
     setError(null);
@@ -163,7 +166,7 @@ function MeteoVerona() {
         const dateStr = dates[i];
         if (dateStr === undefined) continue;
         const d = new Date(dateStr + "T12:00:00");
-        if (d.getDay() === selectedDay) {
+        if (d.getDay() === day) {
           foundIndex = i;
           break;
         }
@@ -180,8 +183,7 @@ function MeteoVerona() {
         foundMax === undefined ||
         foundMin === undefined
       ) {
-        setError("Nessuna previsione disponibile per questo giorno nei prossimi 16 giorni.");
-        return;
+        throw new Error("Nessuna previsione disponibile per questo giorno nei prossimi 16 giorni.");
       }
 
       const [desc, emoji] = WEATHER_CODES[foundCode] ?? ["Condizione sconosciuta", "❓"];
@@ -195,8 +197,9 @@ function MeteoVerona() {
       const roundedMax = Math.round(foundMax);
       const roundedMin = Math.round(foundMin);
 
+      if (id !== requestId.current) return; // risposta obsoleta, ignora
       setForecast({
-        dayName: DAY_NAMES[selectedDay] ?? "",
+        dayName: DAY_NAMES[day] ?? "",
         dateLabel,
         description: desc,
         emoji,
@@ -205,72 +208,151 @@ function MeteoVerona() {
         tips: getClothingAdvice(foundCode, roundedMax, roundedMin),
       });
     } catch (err) {
+      if (id !== requestId.current) return;
       setError(`Si è verificato un errore: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
   }
 
+  // Carica automaticamente la previsione del giorno corrente all'apertura
+  useEffect(() => {
+    void showWeather(new Date().getDay());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const isToday = selectedDay === new Date().getDay();
+
   return (
     <div className="flex min-h-screen items-start justify-center bg-background px-6 py-16">
-      <main className="w-full max-w-md text-center">
-        <h1 className="text-2xl font-semibold text-foreground">Meteo previsto — Verona</h1>
-        <p className="mt-1 mb-8 text-sm text-muted-foreground">
-          Scegli un giorno della settimana per vedere la previsione più vicina
-        </p>
+      <main className="w-full max-w-md">
+        {/* Header */}
+        <header className="text-center">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+            <MapPin className="size-3.5" aria-hidden="true" />
+            Verona, Italia
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+            Meteo Verona
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Scegli un giorno e scopri come vestirti
+          </p>
+        </header>
 
-        <div className="flex items-center justify-center gap-2">
-          <label htmlFor="day-select" className="text-sm text-foreground">
-            Giorno:
-          </label>
-          <select
-            id="day-select"
-            value={selectedDay}
-            onChange={(e) => setSelectedDay(Number(e.target.value))}
-            className="rounded-lg border border-input bg-card px-4 py-2.5 text-base text-card-foreground"
-          >
-            {DAY_OPTIONS.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={showWeather}
-            disabled={loading}
-            className="rounded-lg bg-primary px-4 py-2.5 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-default disabled:opacity-50"
-          >
-            {loading ? "Carico..." : "Mostra meteo"}
-          </button>
+        {/* Selettore giorni */}
+        <div
+          role="group"
+          aria-label="Seleziona il giorno della settimana"
+          className="mt-8 grid grid-cols-7 gap-1 rounded-xl border border-border bg-card p-1"
+        >
+          {DAY_OPTIONS.map(([value, label]) => {
+            const active = value === selectedDay;
+            return (
+              <button
+                key={value}
+                onClick={() => showWeather(value)}
+                aria-pressed={active}
+                className={`rounded-lg px-1 py-2 text-xs font-medium transition-colors sm:text-sm ${
+                  active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                {label.slice(0, 3)}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="mt-10 min-h-24">
-          {error && <p className="text-destructive">{error}</p>}
+        {/* Risultato */}
+        <div className="mt-6 min-h-64">
+          {error && (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-left text-sm text-foreground"
+            >
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+              <p>{error}</p>
+            </div>
+          )}
 
-          {forecast && (
-            <div className="rounded-xl border border-border bg-card p-6 text-card-foreground shadow-sm">
-              <div className="text-5xl" aria-hidden="true">
+          {loading && (
+            <div
+              className="rounded-xl border border-border bg-card p-6"
+              aria-busy="true"
+              aria-label="Caricamento previsione"
+            >
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="size-8 animate-spin text-muted-foreground" aria-hidden="true" />
+                <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+                <div className="mt-2 h-10 w-40 animate-pulse rounded bg-muted" />
+                <div className="mt-3 flex gap-2">
+                  <div className="h-7 w-24 animate-pulse rounded-full bg-muted" />
+                  <div className="h-7 w-20 animate-pulse rounded-full bg-muted" />
+                  <div className="h-7 w-28 animate-pulse rounded-full bg-muted" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {forecast && !loading && (
+            <div className="rounded-xl border border-border bg-card p-6 text-center text-card-foreground shadow-sm">
+              <div className="flex items-center justify-center gap-2 text-sm font-medium">
+                {forecast.dayName}
+                {isToday && (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                    Oggi
+                  </span>
+                )}
+              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground">{forecast.dateLabel}</div>
+
+              <div className="mt-4 text-6xl" aria-hidden="true">
                 {forecast.emoji}
               </div>
-              <div className="mt-2 font-semibold">{forecast.dayName}</div>
-              <div className="text-sm text-muted-foreground">{forecast.dateLabel}</div>
-              <div className="my-2 text-xl">{forecast.description}</div>
-              <div>
-                Min {forecast.tMin}°C — Max {forecast.tMax}°C
+              <div className="mt-1 text-lg font-medium">{forecast.description}</div>
+
+              <div className="mt-5 flex items-center justify-center gap-8">
+                <div className="flex items-center gap-2">
+                  <ArrowUp className="size-4 text-destructive" aria-hidden="true" />
+                  <span className="text-3xl font-semibold tabular-nums">{forecast.tMax}°</span>
+                  <span className="self-start pt-1 text-xs text-muted-foreground">max</span>
+                </div>
+                <div className="h-10 w-px bg-border" aria-hidden="true" />
+                <div className="flex items-center gap-2">
+                  <ArrowDown className="size-4 text-chart-2" aria-hidden="true" />
+                  <span className="text-3xl font-semibold tabular-nums text-muted-foreground">
+                    {forecast.tMin}°
+                  </span>
+                  <span className="self-start pt-1 text-xs text-muted-foreground">min</span>
+                </div>
               </div>
-              <ul className="mt-5 flex list-none flex-wrap justify-center gap-2 p-0">
-                {forecast.tips.map(([icon, text]) => (
-                  <li
-                    key={text}
-                    className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1.5 text-sm"
-                  >
-                    <span aria-hidden="true">{icon}</span> {text}
-                  </li>
-                ))}
-              </ul>
+
+              <div className="mt-6 border-t border-border pt-5">
+                <div className="flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <Shirt className="size-3.5" aria-hidden="true" />
+                  Cosa indossare
+                </div>
+                <ul className="mt-3 flex list-none flex-wrap justify-center gap-2 p-0">
+                  {forecast.tips.map(([icon, text]) => (
+                    <li
+                      key={text}
+                      className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1.5 text-sm"
+                    >
+                      <span aria-hidden="true">{icon}</span> {text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
         </div>
+
+        <footer className="mt-10 text-center text-xs text-muted-foreground">
+          Dati: Open-Meteo · Aggiornati in tempo reale
+        </footer>
       </main>
     </div>
   );
