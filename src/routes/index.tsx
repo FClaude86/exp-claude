@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Loader2, MapPin, TriangleAlert, Shirt } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
