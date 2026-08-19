@@ -201,7 +201,7 @@ function MeteoVerona() {
         emoji,
         tMin: roundedMin,
         tMax: roundedMax,
-        tips: getClothingAdvice(codes[foundIndex], roundedMax, roundedMin),
+        tips: getClothingAdvice(foundCode, roundedMax, roundedMin),
       });
     } catch (err) {
       setError(`Si è verificato un errore: ${err instanceof Error ? err.message : String(err)}`);
