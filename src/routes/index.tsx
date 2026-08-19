@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Loader2, MapPin, TriangleAlert, Shirt } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, Loader2, MapPin, TriangleAlert, Shirt } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -60,15 +60,7 @@ const WEATHER_CODES: Record<number, [string, string]> = {
   99: ["Temporale con grandine forte", "⛈️"],
 };
 
-const DAY_NAMES = [
-  "Domenica",
-  "Lunedì",
-  "Martedì",
-  "Mercoledì",
-  "Giovedì",
-  "Venerdì",
-  "Sabato",
-];
+const DAY_NAMES = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
 
 const DAY_OPTIONS: Array<[number, string]> = [
   [1, "Lunedì"],
@@ -119,6 +111,28 @@ function getClothingAdvice(code: number, tMax: number, tMin: number): Array<[str
   return tips;
 }
 
+function getActivityAdvice(code: number, tMax: number, tMin: number): Array<[string, string]> {
+  const tips: Array<[string, string]> = [];
+
+  if (SNOW_CODES.has(code)) {
+    tips.push(["⛷️", "Sci o passeggiata sulla neve"], ["☕", "Bevanda calda al rientro"]);
+  } else if (RAIN_CODES.has(code)) {
+    tips.push(["🎬", "Cinema o museo"], ["🏋️", "Palestra al coperto"]);
+  } else if (FOG_CODES.has(code)) {
+    tips.push(["🏠", "Meglio attività al chiuso"], ["⚠️", "Attenzione se guidi o vai in bici"]);
+  } else if (tMax >= 30) {
+    tips.push(["🏊", "Piscina o area d'ombra"], ["🌳", "Evita sport intensi nelle ore centrali"]);
+  } else if (CLEAR_CODES.has(code) && tMax >= 18) {
+    tips.push(["🚴", "Bici o passeggiata"], ["🧺", "Pic-nic all'aperto"]);
+  } else if (tMin <= 5) {
+    tips.push(["🏃", "Corsa (vestiti a strati)"], ["🚶", "Passeggiata veloce"]);
+  } else {
+    tips.push(["🚶", "Passeggiata"], ["🎾", "Sport all'aperto"]);
+  }
+
+  return tips;
+}
+
 interface Forecast {
   dayName: string;
   dateLabel: string;
@@ -127,6 +141,7 @@ interface Forecast {
   tMin: number;
   tMax: number;
   tips: Array<[string, string]>;
+  activities: Array<[string, string]>;
 }
 
 interface OpenMeteoResponse {
@@ -158,8 +173,12 @@ function MeteoVerona() {
       if (!res.ok) throw new Error(`Errore API: ${res.status}`);
       const data: OpenMeteoResponse = await res.json();
 
-      const { time: dates, weathercode: codes, temperature_2m_max: tmax, temperature_2m_min: tmin } =
-        data.daily;
+      const {
+        time: dates,
+        weathercode: codes,
+        temperature_2m_max: tmax,
+        temperature_2m_min: tmin,
+      } = data.daily;
 
       let foundIndex = -1;
       for (let i = 0; i < dates.length; i++) {
@@ -206,6 +225,7 @@ function MeteoVerona() {
         tMin: roundedMin,
         tMax: roundedMax,
         tips: getClothingAdvice(foundCode, roundedMax, roundedMin),
+        activities: getActivityAdvice(foundCode, roundedMax, roundedMin),
       });
     } catch (err) {
       if (id !== requestId.current) return;
@@ -218,7 +238,6 @@ function MeteoVerona() {
   // Carica automaticamente la previsione del giorno corrente all'apertura
   useEffect(() => {
     void showWeather(new Date().getDay());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isToday = selectedDay === new Date().getDay();
@@ -272,7 +291,10 @@ function MeteoVerona() {
               role="alert"
               className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-left text-sm text-foreground"
             >
-              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+              <TriangleAlert
+                className="mt-0.5 size-4 shrink-0 text-destructive"
+                aria-hidden="true"
+              />
               <p>{error}</p>
             </div>
           )}
@@ -340,6 +362,23 @@ function MeteoVerona() {
                     <li
                       key={text}
                       className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1.5 text-sm"
+                    >
+                      <span aria-hidden="true">{icon}</span> {text}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="mt-6 border-t border-border pt-5">
+                <div className="flex items-center justify-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <Activity className="size-3.5" aria-hidden="true" />
+                  Attività consigliate
+                </div>
+                <ul className="mt-3 flex list-none flex-wrap justify-center gap-2 p-0">
+                  {forecast.activities.map(([icon, text]) => (
+                    <li
+                      key={text}
+                      className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3.5 py-1.5 text-sm"
                     >
                       <span aria-hidden="true">{icon}</span> {text}
                     </li>
