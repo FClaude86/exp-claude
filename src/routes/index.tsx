@@ -159,31 +159,43 @@ function MeteoVerona() {
 
       let foundIndex = -1;
       for (let i = 0; i < dates.length; i++) {
-        const d = new Date(dates[i] + "T12:00:00");
+        const dateStr = dates[i];
+        if (dateStr === undefined) continue;
+        const d = new Date(dateStr + "T12:00:00");
         if (d.getDay() === selectedDay) {
           foundIndex = i;
           break;
         }
       }
 
-      if (foundIndex === -1) {
+      const foundDate = dates[foundIndex];
+      const foundCode = codes[foundIndex];
+      const foundMax = tmax[foundIndex];
+      const foundMin = tmin[foundIndex];
+      if (
+        foundIndex === -1 ||
+        foundDate === undefined ||
+        foundCode === undefined ||
+        foundMax === undefined ||
+        foundMin === undefined
+      ) {
         setError("Nessuna previsione disponibile per questo giorno nei prossimi 16 giorni.");
         return;
       }
 
-      const [desc, emoji] = WEATHER_CODES[codes[foundIndex]] ?? ["Condizione sconosciuta", "❓"];
-      const dateObj = new Date(dates[foundIndex] + "T12:00:00");
+      const [desc, emoji] = WEATHER_CODES[foundCode] ?? ["Condizione sconosciuta", "❓"];
+      const dateObj = new Date(foundDate + "T12:00:00");
       const dateLabel = dateObj.toLocaleDateString("it-IT", {
         day: "numeric",
         month: "long",
         year: "numeric",
       });
 
-      const roundedMax = Math.round(tmax[foundIndex]);
-      const roundedMin = Math.round(tmin[foundIndex]);
+      const roundedMax = Math.round(foundMax);
+      const roundedMin = Math.round(foundMin);
 
       setForecast({
-        dayName: DAY_NAMES[selectedDay],
+        dayName: DAY_NAMES[selectedDay] ?? "",
         dateLabel,
         description: desc,
         emoji,
